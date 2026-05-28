@@ -1,0 +1,54 @@
+name: Dental Ops Report
+
+on:
+  schedule:
+    # Runs Mon–Fri at 8:00 AM Eastern (13:00 UTC)
+    # Adjust the cron expression to match your timezone / preferred time
+    - cron: '0 13 * * 1-5'
+
+  workflow_dispatch:
+    inputs:
+      report:
+        description: 'Which report to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - preauths
+
+# IMPORTANT: This workflow must run on a self-hosted runner installed on your
+# Windows server/machine that has network access to the OpenDental MySQL database.
+# See README.md for setup instructions.
+jobs:
+  run-report:
+    runs-on: self-hosted   # ← your Windows machine with the GitHub Actions runner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run report
+        env:
+          # Database — set these in GitHub → Settings → Secrets and variables → Actions
+          DB_HOST:     ${{ secrets.DB_HOST }}
+          DB_PORT:     ${{ secrets.DB_PORT }}
+          DB_USER:     ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME:     ${{ secrets.DB_NAME }}
+          # Or use a single connection string instead (overrides the above):
+          # DB_URL: ${{ secrets.DB_URL }}
+
+          # Zoom
+          ZOOM_WEBHOOK_URL: ${{ secrets.ZOOM_WEBHOOK_URL }}
+
+        run: node index.js ${{ github.event.inputs.report || 'all' }}

@@ -1,0 +1,16 @@
+{
+  "name": "dental-ops",
+  "version": "1.0.0",
+  "description": "OpenDental automated reports and Zoom notifications",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "preauths": "node index.js preauths",
+    "all": "node index.js all"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.0",
+    "dotenv": "^16.4.5"
+  }
+}
