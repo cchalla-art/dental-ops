@@ -3,8 +3,14 @@ export default {
 
   sql: `
     SELECT
+      p.PatNum,
       p.LName,
       p.FName,
+      COALESCE(
+        NULLIF(p.WirelessPhone, ''),
+        NULLIF(p.HmPhone, ''),
+        NULLIF(p.WkPhone, '')
+      )                                                    AS Phone,
       DATE_FORMAT(ivh.DateLastVerified, '%m/%d/%Y %h:%i %p') AS VerifiedAt,
       u.UserName,
       car.CarrierName
@@ -21,13 +27,14 @@ export default {
 
   format(rows) {
     if (rows.length === 0) {
-      return { '📝 Last PreAuth Log': 'No log entries found' };
+      return { '📝 Last PreAuth Log': 'No log entries in the last 6 months' };
     }
 
     const latest = rows[0];
-    const entries = rows.map(
-      (r, i) => [`${i + 1}. ${r.LName}, ${r.FName}`, `${r.CarrierName} | ${r.VerifiedAt} | by ${r.UserName || 'Unknown'}`]
-    );
+    const entries = rows.map((r, i) => [
+      `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
+      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.VerifiedAt} | by ${r.UserName || 'Unknown'}`,
+    ]);
 
     return {
       '📝 Last PreAuth Log':  `${latest.VerifiedAt} — ${latest.LName}, ${latest.FName}`,

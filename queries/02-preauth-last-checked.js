@@ -3,8 +3,14 @@ export default {
 
   sql: `
     SELECT
+      p.PatNum,
       p.LName,
       p.FName,
+      COALESCE(
+        NULLIF(p.WirelessPhone, ''),
+        NULLIF(p.HmPhone, ''),
+        NULLIF(p.WkPhone, '')
+      )                                            AS Phone,
       DATE_FORMAT(iv.DateLastVerified, '%m/%d/%Y') AS LastVerified,
       DATEDIFF(CURDATE(), iv.DateLastVerified)      AS DaysAgo,
       car.CarrierName
@@ -20,17 +26,18 @@ export default {
 
   format(rows) {
     if (rows.length === 0) {
-      return { '🗓️ PreAuth Last Checked': 'No verification records found' };
+      return { '🗓️ PreAuth Last Checked': 'No records in the last 6 months' };
     }
 
     const mostRecent = rows[0];
-    const entries = rows.map(
-      (r, i) => [`${i + 1}. ${r.LName}, ${r.FName}`, `${r.CarrierName} | ${r.LastVerified} (${r.DaysAgo}d ago)`]
-    );
+    const entries = rows.map((r, i) => [
+      `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
+      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.LastVerified} (${r.DaysAgo}d ago)`,
+    ]);
 
     return {
       '🗓️ PreAuth Last Checked': `${mostRecent.LastVerified} — ${mostRecent.LName}, ${mostRecent.FName}`,
-      '──────────────────':      '──────────────────────────────────',
+      '──────────────────':       '──────────────────────────────────',
       ...Object.fromEntries(entries),
     };
   },
