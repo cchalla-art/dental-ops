@@ -12,7 +12,7 @@ param(
 # ---------- CONFIGURATION (edit these) ----------------------
 
 $TaskName   = "Dental Ops Daily Report"
-$ProjectDir = "C:\dental-ops"          # Folder where you cloned the repo
+$ProjectDir = "C:\Users\cchalla\Repos\dental-ops"          # Folder where you cloned the repo
 $RunTime    = "08:00"                  # Time to run each day (24hr format)
 $RunDays    = @("Monday","Tuesday","Wednesday","Thursday","Friday")
 
