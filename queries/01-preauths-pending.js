@@ -16,14 +16,14 @@ export default {
       DATEDIFF(CURDATE(), c.DateSent)         AS DaysPending,
       car.CarrierName,
       CASE c.ClaimStatus
-        WHEN 0 THEN 'Unsent'
-        WHEN 1 THEN 'Sent'
-        WHEN 2 THEN 'Received'
-        WHEN 3 THEN 'Accepted'
-        WHEN 4 THEN 'Pending'
-        WHEN 5 THEN 'Denied'
-        WHEN 6 THEN 'Sending'
-        ELSE        'Unknown'
+        WHEN 'U' THEN 'Unsent'
+        WHEN 'S' THEN 'Sent'
+        WHEN 'R' THEN 'Received'
+        WHEN 'A' THEN 'Accepted'
+        WHEN 'P' THEN 'Pending'
+        WHEN 'D' THEN 'Denied'
+        WHEN 'W' THEN 'Sending'
+        ELSE c.ClaimStatus
       END                                     AS StatusText,
       (SELECT DATE_FORMAT(MAX(SecDateEntry), '%m/%d/%Y %h:%i %p')
        FROM claim
@@ -34,7 +34,7 @@ export default {
     JOIN insplan ip  ON s.PlanNum     = ip.PlanNum
     JOIN carrier car ON ip.CarrierNum = car.CarrierNum
     WHERE c.ClaimType = 'PreAuth'
-      AND c.ClaimStatus IN (0, 1, 4)
+      AND c.ClaimStatus IN ('U', 'S', 'R', 'P')
       AND c.DateSent >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
     ORDER BY c.DateSent DESC
   `,

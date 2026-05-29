@@ -23,11 +23,21 @@ console.log('\n── PreAuth ClaimStatus values in your database ────�
 const [statuses] = await conn.execute(`
   SELECT
     ClaimStatus,
-    COUNT(*) AS Count
+    COUNT(*) AS Count,
+    CASE ClaimStatus
+      WHEN 'U' THEN 'Unsent'
+      WHEN 'S' THEN 'Sent'
+      WHEN 'R' THEN 'Received'
+      WHEN 'A' THEN 'Accepted'
+      WHEN 'P' THEN 'Pending'
+      WHEN 'D' THEN 'Denied'
+      WHEN 'W' THEN 'Sending'
+      ELSE 'Unknown — update CASE statement'
+    END AS Label
   FROM claim
   WHERE ClaimType = 'PreAuth'
   GROUP BY ClaimStatus
-  ORDER BY ClaimStatus
+  ORDER BY Count DESC
 `);
 
 console.log('All PreAuth statuses found:');
