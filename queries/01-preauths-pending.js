@@ -16,6 +16,7 @@ export default {
     JOIN carrier car ON ip.CarrierNum = car.CarrierNum
     WHERE c.ClaimType = 'PreAuth'
       AND c.ClaimStatus IN (0, 1, 4)
+      AND c.DateSent>"2026-01-01"
     ORDER BY c.DateSent ASC
   `,
   format(rows) {
