@@ -38,7 +38,7 @@ async function runGroup(groupKey) {
         .replace(/:today/g,     `'${today}'`)
         .replace(/:yesterday/g, `'${yesterday}'`);
       const [rows] = await db.execute(sql);
-      results.push({ name: query.name, rows, formatted: query.format(rows, { today, yesterday }), error: null });
+      results.push({ name: query.name, rows, formatted: query.format(rows, { today, yesterday }), error: null  });
     } catch (err) {
       logger.error(`Query "${query.name}" failed:`, err.message);
       results.push({ name: query.name, rows: [], formatted: null, error: err.message });
@@ -171,9 +171,8 @@ const server = http.createServer(async (req, res) => {
       let zoomStatus = null;
       if (postToZoom) {
         try {
-          const { postToZoom: sendZoom } = await import('./src/zoom.js');
-          const text = results.map(r => r.formatted ?? `⚠️ ${r.name}: ${r.error}`).join('\n\n');
-          await sendZoom(text);
+          const { runQueries } = await import('./src/runner.js');
+          await runQueries(GROUPS[groupKey].queries, GROUPS[groupKey].title);
           zoomStatus = 'success';
         } catch (err) {
           zoomStatus = err.message;
@@ -185,9 +184,19 @@ const server = http.createServer(async (req, res) => {
         const badge = r.error
           ? `<span class="badge badge-err">ERROR</span>`
           : `<span class="badge badge-ok">${r.rows.length} row${r.rows.length !== 1 ? 's' : ''}</span>`;
-        const content = r.error
-          ? `<p style="color:#c53030">${r.error}</p>`
-          : `<p>${formatText(r.formatted)}</p>`;
+
+        // Render fields object as a table, or string as text
+        let content;
+        if (r.error) {
+          content = `<p style="color:#c53030">${r.error}</p>`;
+        } else if (typeof r.formatted === 'object' && r.formatted !== null) {
+          const rows = Object.entries(r.formatted)
+            .map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap">${k}</td><td style="padding:4px 0">${v}</td></tr>`)
+            .join('');
+          content = `<table style="border-collapse:collapse;font-size:.9rem">${rows}</table>`;
+        } else {
+          content = `<p>${formatText(String(r.formatted))}</p>`;
+        }
         return `<div class="${cls}"><h3>${r.name}${badge}</h3>${content}</div>`;
       }).join('');
 
