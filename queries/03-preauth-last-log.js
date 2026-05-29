@@ -11,7 +11,8 @@ export default {
         NULLIF(p.HmPhone, ''),
         NULLIF(p.WkPhone, '')
       )                                                    AS Phone,
-      DATE_FORMAT(ivh.DateLastVerified, '%m/%d/%Y %h:%i %p') AS VerifiedAt,
+      ivh.DateLastVerified                                     AS VerifiedAtRaw,
+      DATE_FORMAT(ivh.DateLastVerified, '%m/%d/%Y %h:%i %p')  AS VerifiedAt,
       u.UserName,
       car.CarrierName
     FROM insverifyhist ivh
@@ -30,8 +31,10 @@ export default {
       return { '📝 Last PreAuth Log': 'No log entries in the last 6 months' };
     }
 
-    const latest = rows[0];
-    const entries = rows.map((r, i) => [
+    // Sort newest first
+    const sorted = [...rows].sort((a, b) => new Date(b.VerifiedAtRaw) - new Date(a.VerifiedAtRaw));
+    const latest = sorted[0];
+    const entries = sorted.map((r, i) => [
       `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
       `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.VerifiedAt} | by ${r.UserName || 'Unknown'}`,
     ]);

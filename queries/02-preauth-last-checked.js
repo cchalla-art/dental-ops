@@ -11,8 +11,9 @@ export default {
         NULLIF(p.HmPhone, ''),
         NULLIF(p.WkPhone, '')
       )                                            AS Phone,
-      DATE_FORMAT(iv.DateLastVerified, '%m/%d/%Y') AS LastVerified,
-      DATEDIFF(CURDATE(), iv.DateLastVerified)      AS DaysAgo,
+      iv.DateLastVerified                           AS LastVerifiedRaw,
+      DATE_FORMAT(iv.DateLastVerified, '%m/%d/%Y')  AS LastVerified,
+      DATEDIFF(CURDATE(), iv.DateLastVerified)       AS DaysAgo,
       car.CarrierName
     FROM insverify iv
     JOIN inssub s    ON iv.FKey = s.InsSubNum AND iv.VerifyType = 1
@@ -29,8 +30,10 @@ export default {
       return { '🗓️ PreAuth Last Checked': 'No records in the last 6 months' };
     }
 
-    const mostRecent = rows[0];
-    const entries = rows.map((r, i) => [
+    // Sort newest first
+    const sorted = [...rows].sort((a, b) => new Date(b.LastVerifiedRaw) - new Date(a.LastVerifiedRaw));
+    const mostRecent = sorted[0];
+    const entries = sorted.map((r, i) => [
       `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
       `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.LastVerified} (${r.DaysAgo}d ago)`,
     ]);

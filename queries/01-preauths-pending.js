@@ -11,6 +11,7 @@ export default {
         NULLIF(p.HmPhone, ''),
         NULLIF(p.WkPhone, '')
       )                                       AS Phone,
+      c.DateSent                              AS DateSentRaw,
       DATE_FORMAT(c.DateSent, '%m/%d/%Y')     AS DateSent,
       DATEDIFF(CURDATE(), c.DateSent)         AS DaysPending,
       car.CarrierName,
@@ -48,8 +49,8 @@ export default {
       };
     }
 
-    // Sort newest first, take top 10
-    const sorted = [...rows].sort((a, b) => new Date(b.DateSent) - new Date(a.DateSent));
+    // Sort newest DateSent first using raw date field
+    const sorted = [...rows].sort((a, b) => new Date(b.DateSentRaw) - new Date(a.DateSentRaw));
     const top10 = sorted.slice(0, 10).map((r, i) => [
       `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
       `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.StatusText} | ${r.DaysPending}d`,
