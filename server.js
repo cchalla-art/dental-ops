@@ -106,8 +106,10 @@ function page(title, body) {
 </head>
 <body>
   <header>
-    <span>🦷</span>
-    <h1>Dental Ops — Local Dashboard</h1>
+    <a href="/" style="display:flex;align-items:center;gap:12px;text-decoration:none;color:white">
+      <span>🦷</span>
+      <h1>Dental Ops — Local Dashboard</h1>
+    </a>
   </header>
   <div class="container">${body}</div>
 </body>
