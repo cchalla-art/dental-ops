@@ -48,11 +48,14 @@ export default {
       .map(([status, count]) => `${status}: ${count}`)
       .join(' | ');
 
-    // Oldest pending
-    const oldest = rows[rows.length - 1];
+    // Sort latest DateSent first (most recently sent at top)
+    const sorted = [...rows].sort((a, b) => new Date(b.DateSent) - new Date(a.DateSent));
 
-    // List each patient (cap at 10 to keep Zoom card readable)
-    const list = rows.slice(0, 10).map(
+    // Oldest = most days pending
+    const oldest = sorted[sorted.length - 1];
+
+    // List each patient latest → oldest (cap at 10 to keep Zoom card readable)
+    const list = sorted.slice(0, 10).map(
       r => `${r.LName}, ${r.FName} | ${r.CarrierName} | ${r.StatusText} | ${r.DaysPending}d`
     );
     if (rows.length > 10) list.push(`... and ${rows.length - 10} more`);
