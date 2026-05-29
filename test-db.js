@@ -48,7 +48,7 @@ try {
 
   // 2. Check OpenDental version
   const [[ver]] = await conn.execute(
-    `SELECT PrefValue AS version FROM preference WHERE PrefName = 'ProgramVersion' LIMIT 1`
+    `SELECT ValueString AS version FROM preference WHERE PrefName = 'ProgramVersion' LIMIT 1`
   );
   console.log(`  ✓  OpenDental version: ${ver?.version ?? 'unknown'}`);
 
