@@ -9,6 +9,7 @@ import { logger } from './src/logger.js';
 // relevant array, and it will appear in the next Zoom notification.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import testQuery         from './queries/00-test-query.js';
 import preauthsPending    from './queries/01-preauths-pending.js';
 import preauthLastChecked from './queries/02-preauth-last-checked.js';
 import preauthLastLog     from './queries/03-preauth-last-log.js';
@@ -18,6 +19,10 @@ import preauthLastLog     from './queries/03-preauth-last-log.js';
 // import recallDueToday      from './queries/05-recall-due-today.js';
 
 const REPORT_GROUPS = {
+  test: {
+    title: 'End-to-End Pipeline Test',
+    queries: [testQuery],
+  },
   preauths: {
     title: 'Pre-Authorization Report',
     queries: [preauthsPending, preauthLastChecked, preauthLastLog],
