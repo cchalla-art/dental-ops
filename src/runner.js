@@ -1,5 +1,6 @@
 import { getDb } from './db.js';
 import { postToZoom, header } from './zoom.js';
+import { logger } from './logger.js';
 
 /**
  * Run an array of query modules and post each result to Zoom.
@@ -18,13 +19,14 @@ export async function runQueries(queryModules, reportTitle = 'Daily Report') {
   for (const mod of queryModules) {
     const q = mod.default ?? mod;
     try {
-      console.log(`Running: ${q.name}`);
+      logger.info(`Running query: ${q.name}`);
       const sql = interpolate(q.sql, params);
       const [rows] = await db.execute(sql);
+      logger.info(`  → ${rows.length} row(s) returned`);
       sections.push(q.format(rows, { today, yesterday }));
     } catch (err) {
+      logger.error(`Query "${q.name}" failed:`, err.message);
       sections.push(`⚠️ *${q.name}* — query error: ${err.message}`);
-      console.error(`Query "${q.name}" failed:`, err.message);
     }
   }
 

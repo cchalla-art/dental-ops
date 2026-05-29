@@ -73,10 +73,11 @@ if ($RunTimeMidDay -ne "") {
     }
 }
 
-# Action: node index.js all
+# Action: node index.js all  (stdout + stderr also captured to logs\task.log)
+$logFile = "$ProjectDir\logs\task.log"
 $action = New-ScheduledTaskAction `
-    -Execute $NodeExe `
-    -Argument "index.js all" `
+    -Execute "cmd.exe" `
+    -Argument "/c `"$NodeExe`" index.js all >> `"$logFile`" 2>&1" `
     -WorkingDirectory $ProjectDir
 
 # Settings

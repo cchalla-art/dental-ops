@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { runQueries } from './src/runner.js';
 import { closeDb } from './src/db.js';
+import { logger } from './src/logger.js';
 
 // ── Active queries ────────────────────────────────────────────────────────────
 // Add or remove imports here to control what runs in each report.
@@ -43,11 +44,13 @@ if (!REPORT_GROUPS[group]) {
 
 const { title, queries } = REPORT_GROUPS[group];
 
-console.log(`Starting report: "${title}" (${queries.length} queries)`);
+logger.prune(); // remove log files older than 30 days
+logger.info(`Starting report: "${title}" (${queries.length} queries)`);
+logger.info(`Logs folder: ${logger.dir}`);
 
 runQueries(queries, title)
   .catch(err => {
-    console.error('Fatal error:', err.message);
+    logger.error('Fatal error:', err.message, err.stack);
     process.exit(1);
   })
   .finally(closeDb);
