@@ -1,12 +1,11 @@
 export default {
   name: 'Last PreAuth Log',
-  description: 'Most recent insurance verification history entries (audit log)',
+
   sql: `
     SELECT
       p.LName,
       p.FName,
-      DATE_FORMAT(ivh.DateLastVerified, '%Y-%m-%d %H:%i') AS VerifiedAt,
-      ivh.UserNum,
+      DATE_FORMAT(ivh.DateLastVerified, '%m/%d/%Y %h:%i %p') AS VerifiedAt,
       u.UserName,
       car.CarrierName
     FROM insverifyhist ivh
@@ -18,12 +17,21 @@ export default {
     ORDER BY ivh.DateLastVerified DESC
     LIMIT 10
   `,
+
   format(rows) {
-    if (rows.length === 0) return 'ℹ️ *Last PreAuth Log* — No log entries found';
-    const lines = rows.map(
-      r =>
-        `  • ${r.LName}, ${r.FName} | ${r.CarrierName} | ${r.VerifiedAt} by ${r.UserName || r.UserNum}`
+    if (rows.length === 0) {
+      return { '📝 Last PreAuth Log': 'No log entries found' };
+    }
+
+    const latest = rows[0];
+    const entries = rows.map(
+      (r, i) => [`${i + 1}. ${r.LName}, ${r.FName}`, `${r.CarrierName} | ${r.VerifiedAt} | by ${r.UserName || 'Unknown'}`]
     );
-    return `📝 *Last PreAuth Log (recent 10)*\n${lines.join('\n')}`;
+
+    return {
+      '📝 Last PreAuth Log':  `${latest.VerifiedAt} — ${latest.LName}, ${latest.FName}`,
+      '──────────────────':   '──────────────────────────────────',
+      ...Object.fromEntries(entries),
+    };
   },
 };

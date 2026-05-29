@@ -1,14 +1,12 @@
 export default {
-  name: 'PreAuth Last Checked Date',
-  description: 'Most recently verified insurance records — last date each active patient\'s insurance was verified',
+  name: 'PreAuth Last Checked',
+
   sql: `
     SELECT
       p.LName,
       p.FName,
-      DATE_FORMAT(iv.DateLastVerified, '%Y-%m-%d')   AS LastVerified,
-      DATE_FORMAT(iv.DateLastAssigned, '%Y-%m-%d')   AS LastAssigned,
-      iv.VerifyType,
-      DATEDIFF(CURDATE(), iv.DateLastVerified)        AS DaysSinceVerified,
+      DATE_FORMAT(iv.DateLastVerified, '%m/%d/%Y') AS LastVerified,
+      DATEDIFF(CURDATE(), iv.DateLastVerified)      AS DaysAgo,
       car.CarrierName
     FROM insverify iv
     JOIN inssub s    ON iv.FKey = s.InsSubNum AND iv.VerifyType = 1
@@ -17,14 +15,23 @@ export default {
     JOIN patient p   ON s.Subscriber = p.PatNum
     WHERE iv.DateLastVerified != '0001-01-01'
     ORDER BY iv.DateLastVerified DESC
-    LIMIT 20
+    LIMIT 10
   `,
+
   format(rows) {
-    if (rows.length === 0) return 'ℹ️ *PreAuth Last Checked* — No verification records found';
-    const lines = rows.map(
-      r =>
-        `  • ${r.LName}, ${r.FName} | ${r.CarrierName} | Last checked: ${r.LastVerified} (${r.DaysSinceVerified}d ago)`
+    if (rows.length === 0) {
+      return { '🗓️ PreAuth Last Checked': 'No verification records found' };
+    }
+
+    const mostRecent = rows[0];
+    const entries = rows.map(
+      (r, i) => [`${i + 1}. ${r.LName}, ${r.FName}`, `${r.CarrierName} | ${r.LastVerified} (${r.DaysAgo}d ago)`]
     );
-    return `🗓️ *PreAuth Last Checked (recent 20)*\n${lines.join('\n')}`;
+
+    return {
+      '🗓️ PreAuth Last Checked': `${mostRecent.LastVerified} — ${mostRecent.LName}, ${mostRecent.FName}`,
+      '──────────────────':      '──────────────────────────────────',
+      ...Object.fromEntries(entries),
+    };
   },
 };

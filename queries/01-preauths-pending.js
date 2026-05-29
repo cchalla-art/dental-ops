@@ -18,9 +18,9 @@ export default {
         WHEN 6 THEN 'Sending'
         ELSE        'Unknown'
       END                                     AS StatusText,
-      (SELECT DATE_FORMAT(MAX(SecDateTEdit), '%m/%d/%Y %h:%i %p')
+      (SELECT DATE_FORMAT(MAX(SecDateEntry), '%m/%d/%Y %h:%i %p')
        FROM claim
-       WHERE ClaimType = 'PreAuth')           AS LastUpdated
+       WHERE ClaimType = 'PreAuth')           AS LastAdded
     FROM claim c
     JOIN patient p   ON c.PatNum      = p.PatNum
     JOIN inssub s    ON c.InsSubNum   = s.InsSubNum
@@ -33,12 +33,12 @@ export default {
   `,
 
   format(rows) {
-    const lastUpdated = rows[0]?.LastUpdated ?? 'N/A';
+    const lastAdded = rows[0]?.LastAdded ?? 'N/A';
 
     if (rows.length === 0) {
       return {
         '📋 PreAuths Pending': 'None — all clear!',
-        '🕒 Last Updated':     lastUpdated,
+        '🕒 Last Added':       lastAdded,
       };
     }
 
@@ -49,7 +49,7 @@ export default {
 
     return {
       '📋 PreAuths Pending': `${rows.length} open`,
-      '🕒 Last Updated':     lastUpdated,
+      '🕒 Last Added to DB': lastAdded,
       '──────────────────':  '──────────────────────────────────',
       ...Object.fromEntries(top10),
       ...(rows.length > 10 ? { '   ': `+ ${rows.length - 10} more` } : {}),
