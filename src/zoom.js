@@ -7,13 +7,17 @@ async function send(format, body) {
     return;
   }
 
+  // ?format=message expects plain text body (no JSON encoding — avoids outer quotes + \n literals)
+  // ?format=fields  expects a JSON object body
+  const isFields = format === 'fields';
+
   const res = await fetch(`${WEBHOOK_URL}?format=${format}`, {
     method: 'POST',
     headers: {
-      'Content-Type':  'application/json',
+      'Content-Type':  isFields ? 'application/json' : 'text/plain',
       'Authorization': WEBHOOK_TOKEN ?? '',
     },
-    body: JSON.stringify(body),
+    body: isFields ? JSON.stringify(body) : String(body),
   });
 
   if (!res.ok) {
