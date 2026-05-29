@@ -13,7 +13,7 @@ export default {
     JOIN insplan ip  ON s.PlanNum = ip.PlanNum
     JOIN carrier car ON ip.CarrierNum = car.CarrierNum
     JOIN patient p   ON s.Subscriber = p.PatNum
-    WHERE iv.DateLastVerified != '0001-01-01'
+    WHERE iv.DateLastVerified >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
     ORDER BY iv.DateLastVerified DESC
     LIMIT 10
   `,

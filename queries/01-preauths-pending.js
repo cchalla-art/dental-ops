@@ -42,8 +42,9 @@ export default {
       };
     }
 
-    // Top 10 latest → oldest
-    const top10 = rows.slice(0, 10).map(
+    // Sort newest DateSent first, then take top 10
+    const sorted = [...rows].sort((a, b) => new Date(b.DateSent) - new Date(a.DateSent));
+    const top10 = sorted.slice(0, 10).map(
       (r, i) => [`${i + 1}. ${r.LName}, ${r.FName}`, `${r.CarrierName} | ${r.StatusText} | ${r.DaysPending}d`]
     );
 

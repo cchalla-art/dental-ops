@@ -14,6 +14,7 @@ export default {
     JOIN carrier car ON ip.CarrierNum = car.CarrierNum
     JOIN patient p   ON s.Subscriber = p.PatNum
     LEFT JOIN userod u ON ivh.UserNum = u.UserNum
+    WHERE ivh.DateLastVerified >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
     ORDER BY ivh.DateLastVerified DESC
     LIMIT 10
   `,
