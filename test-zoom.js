@@ -1,83 +1,54 @@
 /**
- * Zoom webhook format finder — tries every known payload format
- * until one works. Run: node test-zoom.js
+ * Zoom webhook connection test.
+ * Usage:  node test-zoom.js
+ *
+ * Requires in .env:
+ *   ZOOM_WEBHOOK_URL=https://integrations.zoom.us/chat/webhooks/incomingwebhook/xxx
+ *   ZOOM_WEBHOOK_TOKEN=your_verification_token
  */
 
 import 'dotenv/config';
 
-const WEBHOOK_URL = process.env.ZOOM_WEBHOOK_URL;
+const WEBHOOK_URL   = process.env.ZOOM_WEBHOOK_URL;
+const WEBHOOK_TOKEN = process.env.ZOOM_WEBHOOK_TOKEN;
 
 if (!WEBHOOK_URL) {
   console.error('❌  ZOOM_WEBHOOK_URL is not set in your .env file.');
   process.exit(1);
 }
 
-console.log(`🔗  Testing URL: ${WEBHOOK_URL}\n`);
-
-const formats = [
-  {
-    label: 'Format A — { content }',
-    body: { content: 'Dental Ops test message' },
-  },
-  {
-    label: 'Format B — { text }',
-    body: { text: 'Dental Ops test message' },
-  },
-  {
-    label: 'Format C — { message }',
-    body: { message: 'Dental Ops test message' },
-  },
-  {
-    label: 'Format D — { body: { head, body[] } }',
-    body: {
-      body: {
-        head: { text: 'Dental Ops' },
-        body: [{ type: 'message', text: 'Dental Ops test message' }],
-      },
-    },
-  },
-  {
-    label: 'Format E — { head, body[] } (flat)',
-    body: {
-      head: { text: 'Dental Ops' },
-      body: [{ type: 'message', text: 'Dental Ops test message' }],
-    },
-  },
-  {
-    label: 'Format F — { body: string }',
-    body: { body: 'Dental Ops test message' },
-  },
-  {
-    label: 'Format G — { payload: { text } }',
-    body: { payload: { text: 'Dental Ops test message' } },
-  },
-];
-
-for (const fmt of formats) {
-  process.stdout.write(`  Testing ${fmt.label} ... `);
-
-  try {
-    const res = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fmt.body),
-    });
-
-    const raw = await res.text();
-
-    if (res.ok) {
-      console.log(`✅  SUCCESS (HTTP ${res.status})`);
-      console.log(`\n🎉  Working format found!\n`);
-      console.log('    Payload:', JSON.stringify(fmt.body, null, 2));
-      console.log('\n    Check your Zoom channel for the test message.');
-      process.exit(0);
-    } else {
-      console.log(`❌  HTTP ${res.status} — ${raw}`);
-    }
-  } catch (err) {
-    console.log(`❌  Network error: ${err.message}`);
-  }
+if (!WEBHOOK_TOKEN) {
+  console.warn('⚠️   ZOOM_WEBHOOK_TOKEN is not set — request may fail if token is required.');
 }
 
-console.log('\n⚠️  No format worked. The webhook URL itself may be the issue.');
-console.log('    Try regenerating the webhook URL from the Zoom channel.');
+console.log(`🔗  Sending test message to Zoom...`);
+console.log(`    URL:   ${WEBHOOK_URL}`);
+console.log(`    Token: ${WEBHOOK_TOKEN ? '✓ set' : '✗ missing'}\n`);
+
+try {
+  const res = await fetch(`${WEBHOOK_URL}?format=message`, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': WEBHOOK_TOKEN ?? '',
+    },
+    body: JSON.stringify('✅ Dental Ops — Zoom connection test successful! Reports will appear here.'),
+  });
+
+  const raw = await res.text();
+
+  if (res.ok) {
+    console.log(`✅  Success! (HTTP ${res.status})`);
+    console.log('    Check your Zoom channel — you should see the test message.');
+  } else {
+    console.error(`❌  Zoom returned an error (HTTP ${res.status})`);
+    console.error('    Response:', raw);
+    console.error('\n    Things to check:');
+    console.error('    1. Copy the verification token from the Zoom webhook setup page');
+    console.error('       (same place you got the webhook URL)');
+    console.error('    2. Add it to .env as:  ZOOM_WEBHOOK_TOKEN=your_token_here');
+    console.error('    3. Make sure the webhook URL is complete and not expired');
+  }
+} catch (err) {
+  console.error('❌  Network error:', err.message);
+}
