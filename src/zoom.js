@@ -9,8 +9,13 @@ export async function postToZoom(text) {
   const res = await fetch(WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    // Zoom incoming webhook accepts { content: "..." } for plain text
-    body: JSON.stringify({ content: text }),
+    // Zoom integrations.zoom.us webhook format
+    body: JSON.stringify({
+      body: {
+        head: { text: 'Dental Ops' },
+        body: [{ type: 'message', text }],
+      },
+    }),
   });
 
   if (!res.ok) {
