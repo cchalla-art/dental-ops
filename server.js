@@ -102,7 +102,44 @@ function page(title, body) {
              font-size: .75rem; font-weight: 600; margin-left: 8px; }
     .badge-ok  { background: #c6f6d5; color: #276749; }
     .badge-err { background: #fed7d7; color: #9b2c2c; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: 12px; }
+    .data-table th { background: #edf2f7; text-align: left; padding: 6px 10px;
+                     font-weight: 600; color: #4a5568; white-space: nowrap; border-bottom: 2px solid #cbd5e0; }
+    .data-table td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; color: #2d3748; vertical-align: top; }
+    .data-table tr:hover td { background: #ebf8ff; }
+    .extra-row { display: none; }
+    .card-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .btn-xs { padding: 5px 12px; font-size: .8rem; border-radius: 5px; border: none;
+              cursor: pointer; font-weight: 500; transition: background .15s; }
+    .btn-expand { background: #e2e8f0; color: #2d3748; }
+    .btn-expand:hover { background: #cbd5e0; }
+    .btn-copy   { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+    .btn-copy:hover { background: #bee3f8; }
   </style>
+  <script>
+    function toggleRows(btn) {
+      const block = btn.closest('.result-block');
+      const extras = block.querySelectorAll('.extra-row');
+      const isHidden = extras[0]?.style.display === 'none' || extras[0]?.style.display === '';
+      extras.forEach(r => r.style.display = isHidden ? 'table-row' : 'none');
+      btn.textContent = isHidden
+        ? '▲ Show less'
+        : '▼ Show ' + btn.dataset.count + ' more';
+    }
+    function copyCard(btn) {
+      const block = btn.closest('.result-block');
+      const rows = block.querySelectorAll('.data-table tr');
+      const text = Array.from(rows).map(r =>
+        Array.from(r.querySelectorAll('th,td')).map(c => c.innerText.trim()).join('\t')
+      ).join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.background = '#c6f6d5';
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+      });
+    }
+  </script>
 </head>
 <body>
   <header>
@@ -181,26 +218,53 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      const runDate = new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+
       const blocks = results.map(r => {
         const cls = r.error ? 'result-block error' : 'result-block';
         const badge = r.error
           ? `<span class="badge badge-err">ERROR</span>`
           : `<span class="badge badge-ok">${r.rows.length} row${r.rows.length !== 1 ? 's' : ''}</span>`;
 
-        // Render fields object as a table, or string as text
         let content;
         if (r.error) {
           content = `<p style="color:#c53030">${r.error}</p>`;
-        } else if (typeof r.formatted === 'object' && r.formatted !== null) {
-          const rows = Object.entries(r.formatted)
-            .map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap">${k}</td><td style="padding:4px 0">${v}</td></tr>`)
-            .join('');
-          content = `<table style="border-collapse:collapse;font-size:.9rem">${rows}</table>`;
+        } else if (r.rows.length === 0) {
+          content = `<p style="color:#718096;font-size:.9rem">No results.</p>`;
         } else {
-          content = `<p>${formatText(String(r.formatted))}</p>`;
+          // Build full data table from raw rows (skip *Raw helper columns)
+          const cols = Object.keys(r.rows[0]).filter(k => !k.endsWith('Raw') && k !== 'LastAdded');
+          const thead = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+          const tbody = r.rows.map((row, i) => {
+            const cells = cols.map(c => {
+              let val = row[c] ?? '';
+              // Make phone numbers look clickable
+              if (String(c).toLowerCase().includes('phone') && val) {
+                val = `<a href="tel:${val}" style="color:#2b6cb0">${val}</a>`;
+              }
+              return `<td>${val}</td>`;
+            }).join('');
+            const cls2 = i >= 10 ? 'extra-row' : '';
+            return `<tr class="${cls2}">${cells}</tr>`;
+          }).join('');
+
+          const extra = r.rows.length > 10 ? r.rows.length - 10 : 0;
+          const expandBtn = extra > 0
+            ? `<button class="btn-xs btn-expand" onclick="toggleRows(this)" data-count="${extra}">▼ Show ${extra} more</button>`
+            : '';
+
+          content = `
+            <table class="data-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+            <div class="card-actions">
+              ${expandBtn}
+              <button class="btn-xs btn-copy" onclick="copyCard(this)">📋 Copy all</button>
+            </div>`;
         }
-        const runDate = new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
-        return `<div class="${cls}"><h3>${r.name}${badge}<span style="font-size:.75rem;font-weight:400;color:#718096;margin-left:10px">🕒 ${runDate}</span></h3>${content}</div>`;
+
+        return `<div class="${cls}">
+          <h3>${r.name}${badge}<span style="font-size:.75rem;font-weight:400;color:#718096;margin-left:10px">🕒 ${runDate}</span></h3>
+          ${content}
+        </div>`;
       }).join('');
 
       const zoomBanner = zoomStatus === null ? '' :
