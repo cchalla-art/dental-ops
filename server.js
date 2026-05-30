@@ -6,6 +6,9 @@
 
 import 'dotenv/config';
 import http from 'http';
+import fs   from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { getDb, closeDb } from './src/db.js';
 import { logger } from './src/logger.js';
 
@@ -15,18 +18,44 @@ import preauthLastChecked from './queries/02-preauth-last-checked.js';
 import preauthLastLog     from './queries/03-preauth-last-log.js';
 
 const PORT = process.env.PORT || 3001;
+const __dirname   = path.dirname(fileURLToPath(import.meta.url));
+const REPORTS_DIR = path.join(__dirname, 'reports');
+if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true });
 
 const GROUPS = {
-  test:     { title: 'Pipeline Test',          queries: [testQuery] },
-  preauths: { title: 'Pre-Authorization Report', queries: [preauthsPending, preauthLastChecked, preauthLastLog] },
-  all:      { title: 'All Reports',             queries: [testQuery, preauthsPending, preauthLastChecked, preauthLastLog] },
+  test:     { title: 'Pipeline Test',            queries: [testQuery] },
+  preauths: { title: 'Pre-Authorization Report',  queries: [preauthsPending, preauthLastChecked, preauthLastLog] },
+  all:      { title: 'All Reports',               queries: [testQuery, preauthsPending, preauthLastChecked, preauthLastLog] },
 };
 
-// ── Run queries and return structured results ─────────────────────────────────
+// ── Report persistence ────────────────────────────────────────────────────────
+
+function saveReport(groupKey, data) {
+  // Filename sortable by time: preauths_2026-05-30T08-00-00.json
+  const ts = new Date().toISOString().replace(/:/g, '-').slice(0, 19);
+  const filename = `${groupKey}_${ts}.json`;
+  fs.writeFileSync(path.join(REPORTS_DIR, filename), JSON.stringify(data));
+  return filename;
+}
+
+function listReports(groupKey, limit = 25) {
+  try {
+    return fs.readdirSync(REPORTS_DIR)
+      .filter(f => f.startsWith(`${groupKey}_`) && f.endsWith('.json'))
+      .sort().reverse()          // newest first (ISO strings sort lexicographically)
+      .slice(0, limit);
+  } catch { return []; }
+}
+
+function loadReport(filename) {
+  return JSON.parse(fs.readFileSync(path.join(REPORTS_DIR, filename), 'utf8'));
+}
+
+// ── Run queries ───────────────────────────────────────────────────────────────
 
 async function runGroup(groupKey) {
   const group = GROUPS[groupKey];
-  const db = getDb();   // pool — no await needed
+  const db    = getDb();
   const today     = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
 
@@ -38,13 +67,17 @@ async function runGroup(groupKey) {
         .replace(/:today/g,     `'${today}'`)
         .replace(/:yesterday/g, `'${yesterday}'`);
       const [rows] = await db.execute(sql);
-      results.push({ name: query.name, rows, formatted: query.format(rows, { today, yesterday }), error: null  });
+      results.push({ name: query.name, rows, error: null });
     } catch (err) {
       logger.error(`Query "${query.name}" failed:`, err.message);
-      results.push({ name: query.name, rows: [], formatted: null, error: err.message });
+      results.push({ name: query.name, rows: [], error: err.message });
     }
   }
-  return { title: group.title, results, ranAt: new Date().toLocaleString() };
+  return {
+    title:  group.title,
+    results,
+    ranAt:  new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }),
+  };
 }
 
 // ── HTML helpers ──────────────────────────────────────────────────────────────
@@ -55,21 +88,13 @@ function escHtml(v) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function formatText(text) {
-  // Convert *bold* and newlines to HTML
-  return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
-}
-
 function page(title, body) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${title} — Dental Ops</title>
+  <title>${escHtml(title)} — Dental Ops</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -87,12 +112,12 @@ function page(title, body) {
     .btn { display: inline-block; padding: 10px 22px; border-radius: 6px; font-size: .9rem;
            font-weight: 500; text-decoration: none; cursor: pointer; border: none;
            transition: background .15s; }
-    .btn-primary { background: #1a56db; color: white; }
+    .btn-primary   { background: #1a56db; color: white; }
     .btn-primary:hover { background: #1e40af; }
     .btn-secondary { background: #e2e8f0; color: #2d3748; }
     .btn-secondary:hover { background: #cbd5e0; }
-    .btn-green { background: #38a169; color: white; }
-    .btn-green:hover { background: #276749; }
+    .btn-green  { background: #38a169; color: white; }
+    .btn-green:hover  { background: #276749; }
     .result-block { border-left: 4px solid #1a56db; padding: 14px 18px;
                     background: #f7fafc; border-radius: 0 8px 8px 0; margin-bottom: 14px; }
     .result-block.error { border-left-color: #e53e3e; background: #fff5f5; }
@@ -101,9 +126,6 @@ function page(title, body) {
     .result-block.error h3 { color: #c53030; }
     .result-block p { font-size: .9rem; line-height: 1.7; color: #2d3748; }
     .meta { font-size: .8rem; color: #718096; margin-bottom: 20px; }
-    .spinner { display: none; }
-    form { display: inline; }
-    .ran-at { font-size: .8rem; color: #718096; margin-top: 8px; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 999px;
              font-size: .75rem; font-weight: 600; margin-left: 8px; }
     .badge-ok  { background: #c6f6d5; color: #276749; }
@@ -119,14 +141,21 @@ function page(title, body) {
                       background: #e2e8f0; color: #2d3748; list-style: none;
                       user-select: none; margin-bottom: 6px; }
     details summary::-webkit-details-marker { display: none; }
-    details summary:hover { background: #cbd5e0; }
-    details[open] summary { background: #cbd5e0; }
-    .details-table { margin-top: 0; border-top: none; }
+    details summary:hover  { background: #cbd5e0; }
+    details[open] summary  { background: #cbd5e0; }
+    .details-table { margin-top: 0; }
     .card-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
     .btn-xs { padding: 5px 14px; font-size: .82rem; border-radius: 5px; border: none;
               cursor: pointer; font-weight: 500; transition: all .15s; }
-    .btn-copy   { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+    .btn-copy { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
     .btn-copy:hover { background: #bee3f8; }
+    /* History list */
+    .hist-row { display: flex; align-items: center; justify-content: space-between;
+                padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+    .hist-row:last-child { border-bottom: none; }
+    .hist-time { font-weight: 500; color: #2d3748; }
+    .hist-meta { font-size: .78rem; color: #a0aec0; margin-top: 2px; }
+    /* Copy modal */
     #copy-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
                   z-index:9999; align-items:center; justify-content:center; }
     #copy-modal.open { display:flex; }
@@ -153,61 +182,142 @@ function page(title, body) {
       <textarea id="copy-text" readonly></textarea>
       <div class="actions">
         <button class="btn btn-secondary" onclick="document.getElementById('copy-modal').classList.remove('open')">Close</button>
-        <button class="btn btn-primary" onclick="document.getElementById('copy-text').select()">Select All</button>
+        <button class="btn btn-primary"   onclick="document.getElementById('copy-text').select()">Select All</button>
       </div>
     </div>
   </div>
 
   <script>
-    // Copy button — reads pre-computed TSV from hidden textarea, no DOM traversal needed
     document.addEventListener('click', function(e) {
       if (e.target.classList.contains('btn-copy')) {
         var block  = e.target.closest('.result-block');
-        var source = block.querySelector('.tsv-data');
+        var source = block && block.querySelector('.tsv-data');
         var text   = source ? source.value : '';
         var modal  = document.getElementById('copy-modal');
         var ta     = document.getElementById('copy-text');
         ta.value   = text;
         modal.classList.add('open');
         setTimeout(function() { ta.focus(); ta.select(); }, 50);
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(text).catch(function() {});
-        }
+        if (navigator.clipboard) navigator.clipboard.writeText(text).catch(function(){});
         return;
       }
-      // Close modal on backdrop click
-      if (e.target.id === 'copy-modal') {
-        e.target.classList.remove('open');
-      }
+      if (e.target.id === 'copy-modal') e.target.classList.remove('open');
     });
   </script>
 </body>
 </html>`;
 }
 
+// ── Shared result-block renderer (used by both live run and saved view) ───────
+
+function renderResultBlocks(results, runDate) {
+  return results.map(r => {
+    const isErr = !!r.error;
+    const cls   = isErr ? 'result-block error' : 'result-block';
+    const badge = isErr
+      ? `<span class="badge badge-err">ERROR</span>`
+      : `<span class="badge badge-ok">${r.rows.length} row${r.rows.length !== 1 ? 's' : ''}</span>`;
+
+    let content;
+    if (isErr) {
+      content = `<p style="color:#c53030">${escHtml(r.error)}</p>`;
+    } else if (!r.rows || r.rows.length === 0) {
+      content = `<p style="color:#718096;font-size:.9rem">No results.</p>`;
+    } else {
+      const cols  = Object.keys(r.rows[0]).filter(k => !k.endsWith('Raw') && k !== 'LastAdded');
+      const thead = `<tr>${cols.map(c => `<th>${escHtml(c)}</th>`).join('')}</tr>`;
+
+      const makeRow = row => {
+        const cells = cols.map(c => {
+          const raw = row[c] ?? '';
+          if (String(c).toLowerCase().includes('phone') && raw) {
+            return `<td><a href="tel:${escHtml(raw)}" style="color:#2b6cb0">${escHtml(raw)}</a></td>`;
+          }
+          return `<td>${escHtml(raw)}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      };
+
+      const firstRows = r.rows.slice(0, 10).map(makeRow).join('');
+      const extraRows = r.rows.slice(10).map(makeRow).join('');
+      const extra     = r.rows.length - 10;
+
+      const detailsHtml = extra > 0 ? `
+        <details>
+          <summary>▼ Show ${extra} more row${extra !== 1 ? 's' : ''}</summary>
+          <table class="data-table details-table">
+            <thead>${thead}</thead>
+            <tbody>${extraRows}</tbody>
+          </table>
+        </details>` : '';
+
+      // Pre-build TSV (tab-separated) for copy — embedded server-side so JS just reads .value
+      const tsv = [
+        cols.join('\t'),
+        ...r.rows.map(row => cols.map(c => row[c] ?? '').join('\t')),
+      ].join('\n');
+
+      content = `
+        <table class="data-table"><thead>${thead}</thead><tbody>${firstRows}</tbody></table>
+        ${detailsHtml}
+        <div class="card-actions">
+          <button class="btn-xs btn-copy">📋 Copy all (${r.rows.length} rows)</button>
+        </div>
+        <textarea class="tsv-data" readonly
+          style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:-9999px"
+          >${escHtml(tsv)}</textarea>`;
+    }
+
+    return `<div class="${cls}">
+      <h3>${escHtml(r.name)}${badge}
+        <span style="font-size:.75rem;font-weight:400;color:#718096;margin-left:10px">🕒 ${escHtml(runDate)}</span>
+      </h3>
+      ${content}
+    </div>`;
+  }).join('');
+}
+
 // ── Request handler ───────────────────────────────────────────────────────────
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://localhost:${PORT}`);
-  const path = url.pathname;
+const NC = { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' };   // no-cache headers
 
-  // Home page
-  if (path === '/') {
-    const cards = Object.entries(GROUPS).map(([key, g]) => `
-      <div style="display:flex; align-items:center; justify-content:space-between; padding: 12px 0; border-bottom: 1px solid #e2e8f0;">
-        <div>
-          <strong>${g.title}</strong>
-          <span style="color:#718096; font-size:.85rem; margin-left:8px">${g.queries.length} quer${g.queries.length === 1 ? 'y' : 'ies'}</span>
-        </div>
-        <div class="btn-group">
-          <a class="btn btn-secondary" href="/run/${key}">▶ Run</a>
-          <a class="btn btn-green"     href="/run/${key}?zoom=1">▶ Run + Zoom</a>
-        </div>
-      </div>`).join('');
+const server = http.createServer(async (req, res) => {
+  const url      = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
+
+  // ── Home ──────────────────────────────────────────────────────────────────
+  if (pathname === '/') {
+    const cards = Object.entries(GROUPS).map(([key, g]) => {
+      const saved = listReports(key);
+      const savedNote = saved.length
+        ? `<span style="font-size:.75rem;color:#a0aec0;margin-left:10px">${saved.length} saved run${saved.length !== 1 ? 's' : ''}</span>`
+        : `<span style="font-size:.75rem;color:#a0aec0;margin-left:10px">No runs yet</span>`;
+
+      return `
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    padding:14px 0;border-bottom:1px solid #e2e8f0;">
+          <div>
+            <a href="/history/${key}"
+               style="font-weight:600;color:#1a56db;text-decoration:none;font-size:1rem"
+               >${escHtml(g.title)}</a>
+            <span style="color:#718096;font-size:.85rem;margin-left:8px">
+              ${g.queries.length} quer${g.queries.length === 1 ? 'y' : 'ies'}
+            </span>
+            ${savedNote}
+          </div>
+          <div class="btn-group">
+            <a class="btn btn-secondary" href="/run/${key}">▶ Run</a>
+            <a class="btn btn-green"     href="/run/${key}?zoom=1">▶ Run + Zoom</a>
+          </div>
+        </div>`;
+    }).join('');
 
     const body = `
       <div class="card">
         <h2>Report Groups</h2>
+        <p style="font-size:.82rem;color:#718096;margin-bottom:12px">
+          Click a report name to browse saved runs, or ▶ Run to generate a fresh one.
+        </p>
         ${cards}
       </div>
       <div class="card">
@@ -218,19 +328,118 @@ const server = http.createServer(async (req, res) => {
         </div>
       </div>`;
 
-    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
+    res.writeHead(200, NC);
     res.end(page('Dashboard', body));
     return;
   }
 
-  // Run a group: /run/:group  or  /run/:group?zoom=1
-  const match = path.match(/^\/run\/(\w+)$/);
-  if (match) {
-    const groupKey = match[1];
-    const postToZoom = url.searchParams.get('zoom') === '1';
+  // ── History: /history/:group ──────────────────────────────────────────────
+  const histMatch = pathname.match(/^\/history\/(\w+)$/);
+  if (histMatch) {
+    const groupKey = histMatch[1];
+    const group    = GROUPS[groupKey];
+    if (!group) {
+      res.writeHead(404, NC);
+      res.end(page('Not Found', '<div class="card"><p>Unknown report group.</p></div>'));
+      return;
+    }
+
+    const files = listReports(groupKey);
+
+    const rows = files.map(filename => {
+      // Try to read ranAt from JSON; fall back to parsing filename timestamp
+      let ranAt = filename;
+      let zoom  = '';
+      try {
+        const d = loadReport(filename);
+        ranAt   = d.ranAt || ranAt;
+        zoom    = d.zoomStatus === 'success'
+          ? `<span style="font-size:.75rem;color:#276749;margin-left:8px">✅ Zoom posted</span>`
+          : '';
+      } catch {}
+
+      return `
+        <div class="hist-row">
+          <div>
+            <div class="hist-time">${escHtml(ranAt)}${zoom}</div>
+            <div class="hist-meta">${escHtml(filename)}</div>
+          </div>
+          <a class="btn btn-secondary" href="/view/${encodeURIComponent(filename)}"
+             style="font-size:.82rem;padding:6px 16px;white-space:nowrap">View →</a>
+        </div>`;
+    }).join('');
+
+    const emptyMsg = `<p style="color:#718096;padding:12px 0">
+      No saved reports yet. Click <strong>Run</strong> to generate the first one.
+    </p>`;
+
+    const body = `
+      <div class="card">
+        <h2>${escHtml(group.title)} — Run History</h2>
+        ${files.length ? rows : emptyMsg}
+      </div>
+      <div class="btn-group">
+        <a class="btn btn-secondary" href="/">← Home</a>
+        <a class="btn btn-primary"   href="/run/${groupKey}">▶ Run Now</a>
+        <a class="btn btn-green"     href="/run/${groupKey}?zoom=1">▶ Run + Zoom</a>
+      </div>`;
+
+    res.writeHead(200, NC);
+    res.end(page(`History — ${group.title}`, body));
+    return;
+  }
+
+  // ── View saved report: /view/:filename ───────────────────────────────────
+  const viewMatch = pathname.match(/^\/view\/([^/]+\.json)$/);
+  if (viewMatch) {
+    const filename = decodeURIComponent(viewMatch[1]);
+    // Safety: only allow simple filenames, no path traversal
+    if (filename.includes('/') || filename.includes('..')) {
+      res.writeHead(400, NC); res.end('Bad request'); return;
+    }
+    try {
+      const data     = loadReport(filename);
+      const groupKey = filename.split('_')[0];
+
+      const zoomBanner = data.zoomStatus === 'success'
+        ? `<div style="background:#c6f6d5;color:#276749;padding:10px 16px;border-radius:8px;margin-bottom:16px">✅ Zoom posted at time of run.</div>`
+        : '';
+
+      const body = `
+        <div class="card">
+          <h2>${escHtml(data.title)}</h2>
+          <p class="meta">Saved run — ${escHtml(data.ranAt)}</p>
+          ${zoomBanner}
+          ${renderResultBlocks(data.results, data.ranAt)}
+          <div class="btn-group" style="margin-top:16px">
+            <a class="btn btn-secondary" href="/history/${groupKey}">← History</a>
+            <a class="btn btn-secondary" href="/">🏠 Home</a>
+            <a class="btn btn-primary"   href="/run/${groupKey}">▶ Run Again</a>
+            <a class="btn btn-green"     href="/run/${groupKey}?zoom=1">▶ Run + Zoom</a>
+          </div>
+        </div>`;
+
+      res.writeHead(200, NC);
+      res.end(page(data.title, body));
+    } catch (err) {
+      res.writeHead(404, NC);
+      res.end(page('Not Found', `
+        <div class="card">
+          <p style="color:#c53030">Could not load report: ${escHtml(err.message)}</p>
+          <a class="btn btn-secondary" href="/" style="margin-top:16px;display:inline-block">← Home</a>
+        </div>`));
+    }
+    return;
+  }
+
+  // ── Run: /run/:group  [?zoom=1] ──────────────────────────────────────────
+  const runMatch = pathname.match(/^\/run\/(\w+)$/);
+  if (runMatch) {
+    const groupKey  = runMatch[1];
+    const postZoom  = url.searchParams.get('zoom') === '1';
 
     if (!GROUPS[groupKey]) {
-      res.writeHead(404, { 'Content-Type': 'text/html' });
+      res.writeHead(404, NC);
       res.end(page('Not Found', '<div class="card"><p>Unknown report group.</p></div>'));
       return;
     }
@@ -238,105 +447,49 @@ const server = http.createServer(async (req, res) => {
     try {
       const { title, results, ranAt } = await runGroup(groupKey);
 
-      // Optionally post to Zoom
       let zoomStatus = null;
-      if (postToZoom) {
+      if (postZoom) {
         try {
           const { runQueries } = await import('./src/runner.js');
-          await runQueries(GROUPS[groupKey].queries, GROUPS[groupKey].title);
+          await runQueries(GROUPS[groupKey].queries);
           zoomStatus = 'success';
         } catch (err) {
           zoomStatus = err.message;
         }
       }
 
-      const runDate = new Date().toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
-
-      const blocks = results.map(r => {
-        const cls = r.error ? 'result-block error' : 'result-block';
-        const badge = r.error
-          ? `<span class="badge badge-err">ERROR</span>`
-          : `<span class="badge badge-ok">${r.rows.length} row${r.rows.length !== 1 ? 's' : ''}</span>`;
-
-        let content;
-        if (r.error) {
-          content = `<p style="color:#c53030">${r.error}</p>`;
-        } else if (r.rows.length === 0) {
-          content = `<p style="color:#718096;font-size:.9rem">No results.</p>`;
-        } else {
-          // Build full data table from raw rows (skip *Raw helper columns)
-          const cols = Object.keys(r.rows[0]).filter(k => !k.endsWith('Raw') && k !== 'LastAdded');
-          const thead = `<tr>${cols.map(c => `<th>${escHtml(c)}</th>`).join('')}</tr>`;
-
-          // Helper: build one <tr> from a row object
-          const makeRow = row => {
-            const cells = cols.map(c => {
-              let val = row[c] ?? '';
-              if (String(c).toLowerCase().includes('phone') && val) {
-                return `<td><a href="tel:${escHtml(val)}" style="color:#2b6cb0">${escHtml(val)}</a></td>`;
-              }
-              return `<td>${escHtml(val)}</td>`;
-            }).join('');
-            return `<tr>${cells}</tr>`;
-          };
-
-          const firstRows = r.rows.slice(0, 10).map(makeRow).join('');
-          const extraRows = r.rows.slice(10).map(makeRow).join('');
-          const extra = r.rows.length - 10;
-
-          // <details> expander — zero JavaScript needed
-          const detailsHtml = extra > 0 ? `
-            <details>
-              <summary>▼ Show ${extra} more row${extra !== 1 ? 's' : ''}</summary>
-              <table class="data-table details-table">
-                <thead>${thead}</thead>
-                <tbody>${extraRows}</tbody>
-              </table>
-            </details>` : '';
-
-          // Pre-compute TSV so Copy never has to traverse the DOM
-          const tsvLines = [cols.join('\t'),
-            ...r.rows.map(row => cols.map(c => row[c] ?? '').join('\t'))
-          ].join('\n');
-
-          content = `
-            <table class="data-table"><thead>${thead}</thead><tbody>${firstRows}</tbody></table>
-            ${detailsHtml}
-            <div class="card-actions">
-              <button class="btn-xs btn-copy">📋 Copy all (${r.rows.length} rows)</button>
-            </div>
-            <textarea class="tsv-data" readonly style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:-9999px">${escHtml(tsvLines)}</textarea>`;
-        }
-
-        return `<div class="${cls}">
-          <h3>${r.name}${badge}<span style="font-size:.75rem;font-weight:400;color:#718096;margin-left:10px">🕒 ${runDate}</span></h3>
-          ${content}
-        </div>`;
-      }).join('');
+      // Persist to disk
+      const savedFilename = saveReport(groupKey, { title, results, ranAt, zoomStatus });
+      logger.info(`Report saved: ${savedFilename}`);
 
       const zoomBanner = zoomStatus === null ? '' :
         zoomStatus === 'success'
           ? `<div style="background:#c6f6d5;color:#276749;padding:10px 16px;border-radius:8px;margin-bottom:16px">✅ Posted to Zoom successfully.</div>`
-          : `<div style="background:#fed7d7;color:#9b2c2c;padding:10px 16px;border-radius:8px;margin-bottom:16px">❌ Zoom error: ${zoomStatus}</div>`;
+          : `<div style="background:#fed7d7;color:#9b2c2c;padding:10px 16px;border-radius:8px;margin-bottom:16px">❌ Zoom error: ${escHtml(zoomStatus)}</div>`;
 
       const body = `
         <div class="card">
-          <h2>${title}</h2>
-          <p class="meta">Run at: ${ranAt}</p>
+          <h2>${escHtml(title)}</h2>
+          <p class="meta">Run at: ${escHtml(ranAt)}</p>
           ${zoomBanner}
-          ${blocks}
+          ${renderResultBlocks(results, ranAt)}
           <div class="btn-group" style="margin-top:16px">
-            <a class="btn btn-secondary" href="/">← Back</a>
+            <a class="btn btn-secondary" href="/history/${groupKey}">📋 History</a>
+            <a class="btn btn-secondary" href="/">🏠 Home</a>
             <a class="btn btn-primary"   href="/run/${groupKey}">↻ Re-run</a>
             <a class="btn btn-green"     href="/run/${groupKey}?zoom=1">↻ Re-run + Zoom</a>
           </div>
         </div>`;
 
-      res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
+      res.writeHead(200, NC);
       res.end(page(title, body));
     } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'text/html' });
-      res.end(page('Error', `<div class="card"><p style="color:red">${err.message}</p><a class="btn btn-secondary" style="margin-top:16px;display:inline-block" href="/">← Back</a></div>`));
+      res.writeHead(500, NC);
+      res.end(page('Error', `
+        <div class="card">
+          <p style="color:red">${escHtml(err.message)}</p>
+          <a class="btn btn-secondary" style="margin-top:16px;display:inline-block" href="/">← Back</a>
+        </div>`));
     }
     return;
   }
