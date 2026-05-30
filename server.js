@@ -116,6 +116,14 @@ function page(title, body) {
     .btn-expand:hover { background: #cbd5e0; }
     .btn-copy   { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
     .btn-copy:hover { background: #bee3f8; }
+    #copy-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+                  z-index:9999; align-items:center; justify-content:center; }
+    #copy-modal.open { display:flex; }
+    #copy-box { background:white; border-radius:10px; padding:20px; width:90%; max-width:700px; }
+    #copy-box h4 { margin-bottom:10px; color:#2d3748; }
+    #copy-box textarea { width:100%; height:280px; font-family:monospace; font-size:.8rem;
+                         border:1px solid #cbd5e0; border-radius:6px; padding:8px; resize:vertical; }
+    #copy-box .actions { display:flex; gap:8px; margin-top:10px; justify-content:flex-end; }
   </style>
 </head>
 <body>
@@ -126,52 +134,69 @@ function page(title, body) {
     </a>
   </header>
   <div class="container">${body}</div>
+
+  <!-- Copy modal -->
+  <div id="copy-modal">
+    <div id="copy-box">
+      <h4>📋 Copy data — select all then Ctrl+C</h4>
+      <textarea id="copy-text" readonly></textarea>
+      <div class="actions">
+        <button class="btn btn-secondary" onclick="document.getElementById('copy-modal').classList.remove('open')">Close</button>
+        <button class="btn btn-primary" onclick="document.getElementById('copy-text').select()">Select All</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    function toggleRows(btn) {
-      var block = btn.closest('.result-block');
-      var expanded = block.classList.toggle('rows-expanded');
-      btn.textContent = expanded
-        ? '▲ Show less'
-        : '▼ Show ' + btn.getAttribute('data-count') + ' more';
-    }
-    function flash(btn, orig) {
-      btn.textContent = '✓ Copied!';
-      btn.style.background = '#c6f6d5';
-      btn.style.color = '#276749';
-      setTimeout(function() {
-        btn.textContent = orig;
-        btn.style.background = '';
-        btn.style.color = '';
-      }, 2000);
-    }
-    function copyCard(btn) {
-      var orig = btn.textContent;
-      var block = btn.closest('.result-block');
-      var trs = block.querySelectorAll('.data-table tr');
-      var lines = [];
-      for (var i = 0; i < trs.length; i++) {
-        var cells = trs[i].querySelectorAll('th, td');
-        var row = [];
-        for (var j = 0; j < cells.length; j++) {
-          row.push(cells[j].innerText.trim());
+    // Event delegation — one listener handles all buttons no matter when they appear
+    document.addEventListener('click', function(e) {
+
+      // ── Show more / less ──────────────────────────────
+      if (e.target.classList.contains('btn-expand')) {
+        var btn   = e.target;
+        var block = btn.closest('.result-block');
+        var expanded = block.classList.toggle('rows-expanded');
+        btn.textContent = expanded
+          ? '▲ Show less'
+          : '▼ Show ' + btn.getAttribute('data-count') + ' more';
+        return;
+      }
+
+      // ── Copy all rows ─────────────────────────────────
+      if (e.target.classList.contains('btn-copy')) {
+        var btn   = e.target;
+        var block = btn.closest('.result-block');
+        var trs   = block.querySelectorAll('.data-table tr');
+        var lines = [];
+        for (var i = 0; i < trs.length; i++) {
+          var cells = trs[i].querySelectorAll('th, td');
+          var cols  = [];
+          for (var j = 0; j < cells.length; j++) {
+            cols.push(cells[j].innerText.trim());
+          }
+          lines.push(cols.join('\\t'));
         }
-        lines.push(row.join('\t'));
+        var text = lines.join('\\n');
+
+        // Show modal with text pre-selected
+        var modal = document.getElementById('copy-modal');
+        var ta    = document.getElementById('copy-text');
+        ta.value  = lines.join('\n');
+        modal.classList.add('open');
+        setTimeout(function() { ta.focus(); ta.select(); }, 50);
+
+        // Also try clipboard API silently
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(lines.join('\n')).catch(function(){});
+        }
+        return;
       }
-      var text = lines.join('\n');
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function() { flash(btn, orig); });
-      } else {
-        var ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        try { document.execCommand('copy'); flash(btn, orig); } catch(e) {}
-        document.body.removeChild(ta);
+
+      // ── Close modal when clicking backdrop ────────────
+      if (e.target.id === 'copy-modal') {
+        e.target.classList.remove('open');
       }
-    }
+    });
   </script>
 </body>
 </html>`;
@@ -274,14 +299,14 @@ const server = http.createServer(async (req, res) => {
 
           const extra = r.rows.length > 10 ? r.rows.length - 10 : 0;
           const expandBtn = extra > 0
-            ? `<button class="btn-xs btn-expand" onclick="toggleRows(this)" data-count="${extra}">▼ Show ${extra} more</button>`
+            ? `<button class="btn-xs btn-expand" data-count="${extra}">▼ Show ${extra} more</button>`
             : '';
 
           content = `
             <table class="data-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
             <div class="card-actions">
               ${expandBtn}
-              <button class="btn-xs btn-copy" onclick="copyCard(this)">📋 Copy all</button>
+              <button class="btn-xs btn-copy">📋 Copy all</button>
             </div>`;
         }
 
