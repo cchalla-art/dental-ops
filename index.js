@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { runQueries } from './src/runner.js';
-import { closeDb } from './src/db.js';
 import { logger } from './src/logger.js';
 
 // ── Active queries ────────────────────────────────────────────────────────────
@@ -58,4 +57,4 @@ runQueries(queries, title)
     logger.error('Fatal error:', err.message, err.stack);
     process.exit(1);
   })
-  .finally(closeDb);
+  .finally(() => process.exit(0));  // let Node exit naturally, pool closes with process
