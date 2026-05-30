@@ -14,7 +14,12 @@ export default {
       iv.DateLastVerified                           AS LastVerifiedRaw,
       DATE_FORMAT(iv.DateLastVerified, '%m/%d/%Y')  AS LastVerified,
       DATEDIFF(CURDATE(), iv.DateLastVerified)       AS DaysAgo,
-      car.CarrierName
+      car.CarrierName,
+      (SELECT DATE_FORMAT(MIN(a.AptDateTime), '%m/%d/%Y')
+       FROM appointment a
+       WHERE a.PatNum = p.PatNum
+         AND a.AptStatus IN (1, 3)
+         AND a.AptDateTime > NOW())                  AS NextAppt
     FROM insverify iv
     JOIN inssub s    ON iv.FKey = s.InsSubNum AND iv.VerifyType = 1
     JOIN insplan ip  ON s.PlanNum = ip.PlanNum
@@ -35,7 +40,7 @@ export default {
     const mostRecent = sorted[0];
     const entries = sorted.map((r, i) => [
       `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
-      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.LastVerified} (${r.DaysAgo}d ago)`,
+      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.LastVerified} (${r.DaysAgo}d ago) | 📅 ${r.NextAppt || '⚠️ No appt'}`,
     ]);
 
     return {

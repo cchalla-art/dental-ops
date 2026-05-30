@@ -20,6 +20,11 @@ export default {
         WHEN 'R' THEN 'Received'
         ELSE c.ClaimStatus
       END                                     AS StatusText,
+      (SELECT DATE_FORMAT(MIN(a.AptDateTime), '%m/%d/%Y')
+       FROM appointment a
+       WHERE a.PatNum = p.PatNum
+         AND a.AptStatus IN (1, 3)
+         AND a.AptDateTime > NOW())           AS NextAppt,
       (SELECT DATE_FORMAT(MAX(SecDateEntry), '%m/%d/%Y %h:%i %p')
        FROM claim
        WHERE ClaimType = 'PreAuth')           AS LastAdded
@@ -48,7 +53,7 @@ export default {
     const sorted = [...rows].sort((a, b) => new Date(b.DateSentRaw) - new Date(a.DateSentRaw));
     const top10 = sorted.slice(0, 10).map((r, i) => [
       `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
-      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.StatusText} | ${r.DaysPending}d`,
+      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | ${r.StatusText} | ${r.DaysPending}d | 📅 ${r.NextAppt || '⚠️ No appt'}`,
     ]);
 
     return {
