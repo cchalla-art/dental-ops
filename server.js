@@ -49,6 +49,12 @@ async function runGroup(groupKey) {
 
 // ── HTML helpers ──────────────────────────────────────────────────────────────
 
+function escHtml(v) {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function formatText(text) {
   // Convert *bold* and newlines to HTML
   return text
@@ -107,13 +113,18 @@ function page(title, body) {
                      font-weight: 600; color: #4a5568; white-space: nowrap; border-bottom: 2px solid #cbd5e0; }
     .data-table td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; color: #2d3748; vertical-align: top; }
     .data-table tr:hover td { background: #ebf8ff; }
-    .extra-row { display: none; }
-    .rows-expanded .extra-row { display: table-row; }
-    .card-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    details { margin-top: 8px; }
+    details summary { cursor: pointer; display: inline-block; padding: 5px 14px;
+                      font-size: .82rem; font-weight: 500; border-radius: 5px;
+                      background: #e2e8f0; color: #2d3748; list-style: none;
+                      user-select: none; margin-bottom: 6px; }
+    details summary::-webkit-details-marker { display: none; }
+    details summary:hover { background: #cbd5e0; }
+    details[open] summary { background: #cbd5e0; }
+    .details-table { margin-top: 0; border-top: none; }
+    .card-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
     .btn-xs { padding: 5px 14px; font-size: .82rem; border-radius: 5px; border: none;
               cursor: pointer; font-weight: 500; transition: all .15s; }
-    .btn-expand { background: #e2e8f0; color: #2d3748; }
-    .btn-expand:hover { background: #cbd5e0; }
     .btn-copy   { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
     .btn-copy:hover { background: #bee3f8; }
     #copy-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
@@ -148,51 +159,23 @@ function page(title, body) {
   </div>
 
   <script>
-    // Event delegation — one listener handles all buttons no matter when they appear
+    // Copy button — reads pre-computed TSV from hidden textarea, no DOM traversal needed
     document.addEventListener('click', function(e) {
-
-      // ── Show more / less ──────────────────────────────
-      if (e.target.classList.contains('btn-expand')) {
-        var btn   = e.target;
-        var block = btn.closest('.result-block');
-        var expanded = block.classList.toggle('rows-expanded');
-        btn.textContent = expanded
-          ? '▲ Show less'
-          : '▼ Show ' + btn.getAttribute('data-count') + ' more';
-        return;
-      }
-
-      // ── Copy all rows ─────────────────────────────────
       if (e.target.classList.contains('btn-copy')) {
-        var btn   = e.target;
-        var block = btn.closest('.result-block');
-        var trs   = block.querySelectorAll('.data-table tr');
-        var lines = [];
-        for (var i = 0; i < trs.length; i++) {
-          var cells = trs[i].querySelectorAll('th, td');
-          var cols  = [];
-          for (var j = 0; j < cells.length; j++) {
-            cols.push(cells[j].innerText.trim());
-          }
-          lines.push(cols.join('\\t'));
-        }
-        var text = lines.join('\\n');
-
-        // Show modal with text pre-selected
-        var modal = document.getElementById('copy-modal');
-        var ta    = document.getElementById('copy-text');
-        ta.value  = lines.join('\n');
+        var block  = e.target.closest('.result-block');
+        var source = block.querySelector('.tsv-data');
+        var text   = source ? source.value : '';
+        var modal  = document.getElementById('copy-modal');
+        var ta     = document.getElementById('copy-text');
+        ta.value   = text;
         modal.classList.add('open');
         setTimeout(function() { ta.focus(); ta.select(); }, 50);
-
-        // Also try clipboard API silently
         if (navigator.clipboard) {
-          navigator.clipboard.writeText(lines.join('\n')).catch(function(){});
+          navigator.clipboard.writeText(text).catch(function() {});
         }
         return;
       }
-
-      // ── Close modal when clicking backdrop ────────────
+      // Close modal on backdrop click
       if (e.target.id === 'copy-modal') {
         e.target.classList.remove('open');
       }
@@ -235,7 +218,7 @@ const server = http.createServer(async (req, res) => {
         </div>
       </div>`;
 
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
     res.end(page('Dashboard', body));
     return;
   }
@@ -283,31 +266,46 @@ const server = http.createServer(async (req, res) => {
         } else {
           // Build full data table from raw rows (skip *Raw helper columns)
           const cols = Object.keys(r.rows[0]).filter(k => !k.endsWith('Raw') && k !== 'LastAdded');
-          const thead = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
-          const tbody = r.rows.map((row, i) => {
+          const thead = `<tr>${cols.map(c => `<th>${escHtml(c)}</th>`).join('')}</tr>`;
+
+          // Helper: build one <tr> from a row object
+          const makeRow = row => {
             const cells = cols.map(c => {
               let val = row[c] ?? '';
-              // Make phone numbers look clickable
               if (String(c).toLowerCase().includes('phone') && val) {
-                val = `<a href="tel:${val}" style="color:#2b6cb0">${val}</a>`;
+                return `<td><a href="tel:${escHtml(val)}" style="color:#2b6cb0">${escHtml(val)}</a></td>`;
               }
-              return `<td>${val}</td>`;
+              return `<td>${escHtml(val)}</td>`;
             }).join('');
-            const cls2 = i >= 10 ? 'extra-row' : '';
-            return `<tr class="${cls2}">${cells}</tr>`;
-          }).join('');
+            return `<tr>${cells}</tr>`;
+          };
 
-          const extra = r.rows.length > 10 ? r.rows.length - 10 : 0;
-          const expandBtn = extra > 0
-            ? `<button class="btn-xs btn-expand" data-count="${extra}">▼ Show ${extra} more</button>`
-            : '';
+          const firstRows = r.rows.slice(0, 10).map(makeRow).join('');
+          const extraRows = r.rows.slice(10).map(makeRow).join('');
+          const extra = r.rows.length - 10;
+
+          // <details> expander — zero JavaScript needed
+          const detailsHtml = extra > 0 ? `
+            <details>
+              <summary>▼ Show ${extra} more row${extra !== 1 ? 's' : ''}</summary>
+              <table class="data-table details-table">
+                <thead>${thead}</thead>
+                <tbody>${extraRows}</tbody>
+              </table>
+            </details>` : '';
+
+          // Pre-compute TSV so Copy never has to traverse the DOM
+          const tsvLines = [cols.join('\t'),
+            ...r.rows.map(row => cols.map(c => row[c] ?? '').join('\t'))
+          ].join('\n');
 
           content = `
-            <table class="data-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+            <table class="data-table"><thead>${thead}</thead><tbody>${firstRows}</tbody></table>
+            ${detailsHtml}
             <div class="card-actions">
-              ${expandBtn}
-              <button class="btn-xs btn-copy">📋 Copy all</button>
-            </div>`;
+              <button class="btn-xs btn-copy">📋 Copy all (${r.rows.length} rows)</button>
+            </div>
+            <textarea class="tsv-data" readonly style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:-9999px">${escHtml(tsvLines)}</textarea>`;
         }
 
         return `<div class="${cls}">
@@ -334,7 +332,7 @@ const server = http.createServer(async (req, res) => {
           </div>
         </div>`;
 
-      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-store' });
       res.end(page(title, body));
     } catch (err) {
       res.writeHead(500, { 'Content-Type': 'text/html' });
