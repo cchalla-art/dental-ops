@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js all",
-    "dashboard": "node server.js",
+    "dashboard": "node --watch server.js",
     "preauths": "node index.js preauths",
     "all": "node index.js all",
     "test:zoom": "node test-zoom.js",
