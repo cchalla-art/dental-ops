@@ -8,7 +8,7 @@ import { logger } from './logger.js';
  * SQL may use :today and :yesterday as named placeholders.
  */
 export async function runQueries(queryModules) {
-  const db = await getDb();
+  const db = getDb();   // pool — no await needed
 
   const today     = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);

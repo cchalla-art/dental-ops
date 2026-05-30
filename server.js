@@ -26,7 +26,7 @@ const GROUPS = {
 
 async function runGroup(groupKey) {
   const group = GROUPS[groupKey];
-  const db = await getDb();
+  const db = getDb();   // pool — no await needed
   const today     = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
 
@@ -199,7 +199,8 @@ const server = http.createServer(async (req, res) => {
         } else {
           content = `<p>${formatText(String(r.formatted))}</p>`;
         }
-        return `<div class="${cls}"><h3>${r.name}${badge}</h3>${content}</div>`;
+        const runDate = new Date().toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+        return `<div class="${cls}"><h3>${r.name}${badge}<span style="font-size:.75rem;font-weight:400;color:#718096;margin-left:10px">🕒 ${runDate}</span></h3>${content}</div>`;
       }).join('');
 
       const zoomBanner = zoomStatus === null ? '' :
