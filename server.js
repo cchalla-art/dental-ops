@@ -12,10 +12,11 @@ import { fileURLToPath } from 'url';
 import { getDb, closeDb } from './src/db.js';
 import { logger } from './src/logger.js';
 
-import testQuery          from './queries/00-test-query.js';
-import preauthsPending    from './queries/01-preauths-pending.js';
-import preauthLastChecked from './queries/02-preauth-last-checked.js';
-import preauthLastLog     from './queries/03-preauth-last-log.js';
+import testQuery             from './queries/00-test-query.js';
+import preauthsPending        from './queries/01-preauths-pending.js';
+import preauthLastChecked     from './queries/02-preauth-last-checked.js';
+import preauthLastLog         from './queries/03-preauth-last-log.js';
+import preauthReceivedNoAppt  from './queries/06-preauth-received-no-appt.js';
 
 const PORT = process.env.PORT || 3001;
 const __dirname   = path.dirname(fileURLToPath(import.meta.url));
@@ -24,8 +25,8 @@ if (!fs.existsSync(REPORTS_DIR)) fs.mkdirSync(REPORTS_DIR, { recursive: true });
 
 const GROUPS = {
   test:     { title: 'Pipeline Test',            queries: [testQuery] },
-  preauths: { title: 'Pre-Authorization Report',  queries: [preauthsPending, preauthLastChecked, preauthLastLog] },
-  all:      { title: 'All Reports',               queries: [testQuery, preauthsPending, preauthLastChecked, preauthLastLog] },
+  preauths: { title: 'Pre-Authorization Report',  queries: [preauthReceivedNoAppt, preauthsPending, preauthLastChecked, preauthLastLog] },
+  all:      { title: 'All Reports',               queries: [preauthReceivedNoAppt, preauthsPending, preauthLastChecked, preauthLastLog, testQuery] },
 };
 
 // ── Report persistence ────────────────────────────────────────────────────────

@@ -8,10 +8,11 @@ import { logger } from './src/logger.js';
 // relevant array, and it will appear in the next Zoom notification.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import testQuery         from './queries/00-test-query.js';
-import preauthsPending    from './queries/01-preauths-pending.js';
-import preauthLastChecked from './queries/02-preauth-last-checked.js';
-import preauthLastLog     from './queries/03-preauth-last-log.js';
+import testQuery             from './queries/00-test-query.js';
+import preauthsPending        from './queries/01-preauths-pending.js';
+import preauthLastChecked     from './queries/02-preauth-last-checked.js';
+import preauthLastLog         from './queries/03-preauth-last-log.js';
+import preauthReceivedNoAppt  from './queries/06-preauth-received-no-appt.js';
 
 // "For later" — uncomment to enable:
 // import seenYesterdayNoAppt from './queries/04-seen-yesterday-no-appt.js';
@@ -24,7 +25,8 @@ const REPORT_GROUPS = {
   },
   preauths: {
     title: 'Pre-Authorization Report',
-    queries: [preauthsPending, preauthLastChecked, preauthLastLog],
+    // preauthReceivedNoAppt first — most actionable (need to call these patients)
+    queries: [preauthReceivedNoAppt, preauthsPending, preauthLastChecked, preauthLastLog],
   },
   // Uncomment when ready:
   // followups: {
@@ -33,7 +35,7 @@ const REPORT_GROUPS = {
   // },
   all: {
     title: 'Daily Dental Operations Report',
-    queries: [preauthsPending, preauthLastChecked, preauthLastLog],
+    queries: [preauthReceivedNoAppt, preauthsPending, preauthLastChecked, preauthLastLog],
   },
 };
 
