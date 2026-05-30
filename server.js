@@ -108,38 +108,15 @@ function page(title, body) {
     .data-table td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; color: #2d3748; vertical-align: top; }
     .data-table tr:hover td { background: #ebf8ff; }
     .extra-row { display: none; }
+    .rows-expanded .extra-row { display: table-row; }
     .card-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-    .btn-xs { padding: 5px 12px; font-size: .8rem; border-radius: 5px; border: none;
-              cursor: pointer; font-weight: 500; transition: background .15s; }
+    .btn-xs { padding: 5px 14px; font-size: .82rem; border-radius: 5px; border: none;
+              cursor: pointer; font-weight: 500; transition: all .15s; }
     .btn-expand { background: #e2e8f0; color: #2d3748; }
     .btn-expand:hover { background: #cbd5e0; }
     .btn-copy   { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
     .btn-copy:hover { background: #bee3f8; }
   </style>
-  <script>
-    function toggleRows(btn) {
-      const block = btn.closest('.result-block');
-      const extras = block.querySelectorAll('.extra-row');
-      const isHidden = extras[0]?.style.display === 'none' || extras[0]?.style.display === '';
-      extras.forEach(r => r.style.display = isHidden ? 'table-row' : 'none');
-      btn.textContent = isHidden
-        ? '▲ Show less'
-        : '▼ Show ' + btn.dataset.count + ' more';
-    }
-    function copyCard(btn) {
-      const block = btn.closest('.result-block');
-      const rows = block.querySelectorAll('.data-table tr');
-      const text = Array.from(rows).map(r =>
-        Array.from(r.querySelectorAll('th,td')).map(c => c.innerText.trim()).join('\t')
-      ).join('\n');
-      navigator.clipboard.writeText(text).then(() => {
-        const orig = btn.textContent;
-        btn.textContent = '✓ Copied!';
-        btn.style.background = '#c6f6d5';
-        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
-      });
-    }
-  </script>
 </head>
 <body>
   <header>
@@ -149,6 +126,53 @@ function page(title, body) {
     </a>
   </header>
   <div class="container">${body}</div>
+  <script>
+    function toggleRows(btn) {
+      var block = btn.closest('.result-block');
+      var expanded = block.classList.toggle('rows-expanded');
+      btn.textContent = expanded
+        ? '▲ Show less'
+        : '▼ Show ' + btn.getAttribute('data-count') + ' more';
+    }
+    function flash(btn, orig) {
+      btn.textContent = '✓ Copied!';
+      btn.style.background = '#c6f6d5';
+      btn.style.color = '#276749';
+      setTimeout(function() {
+        btn.textContent = orig;
+        btn.style.background = '';
+        btn.style.color = '';
+      }, 2000);
+    }
+    function copyCard(btn) {
+      var orig = btn.textContent;
+      var block = btn.closest('.result-block');
+      var trs = block.querySelectorAll('.data-table tr');
+      var lines = [];
+      for (var i = 0; i < trs.length; i++) {
+        var cells = trs[i].querySelectorAll('th, td');
+        var row = [];
+        for (var j = 0; j < cells.length; j++) {
+          row.push(cells[j].innerText.trim());
+        }
+        lines.push(row.join('\t'));
+      }
+      var text = lines.join('\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() { flash(btn, orig); });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand('copy'); flash(btn, orig); } catch(e) {}
+        document.body.removeChild(ta);
+      }
+    }
+  </script>
 </body>
 </html>`;
 }
