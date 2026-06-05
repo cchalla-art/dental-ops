@@ -5,7 +5,7 @@
  * but who has NO future scheduled/confirmed appointment on the calendar.
  * These are the patients that need to be called to book their procedure.
  *
- * Filters: last 6 months, ClaimStatus = 'R', no AptStatus IN (1,3) after NOW()
+ * Filters: last 6 months, ClaimStatus = 'R', no AptStatus IN (1,3) after PreAuth received date
  */
 export default {
   name: 'PreAuth Received — Not Scheduled',
@@ -20,9 +20,9 @@ export default {
         NULLIF(p.HmPhone,       ''),
         NULLIF(p.WkPhone,       '')
       )                                         AS Phone,
-      c.DateSent                                AS DateSentRaw,
-      DATE_FORMAT(c.DateSent, '%m/%d/%Y')       AS PreAuthSent,
-      DATEDIFF(CURDATE(), c.DateSent)           AS DaysSinceSent,
+      c.DateReceived                            AS DateReceivedRaw,
+      DATE_FORMAT(c.DateReceived, '%m/%d/%Y')   AS PreAuthReceived,
+      DATEDIFF(CURDATE(), c.DateReceived)       AS DaysSinceReceived,
       car.CarrierName
     FROM claim c
     JOIN patient  p   ON c.PatNum      = p.PatNum
@@ -31,14 +31,15 @@ export default {
     JOIN carrier  car ON ip.CarrierNum = car.CarrierNum
     WHERE c.ClaimType   = 'PreAuth'
       AND c.ClaimStatus = 'R'
-      AND c.DateSent   >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-      AND p.PatNum NOT IN (
-            SELECT PatNum
-            FROM   appointment
-            WHERE  AptStatus IN (1, 3)
-              AND  AptDateTime > NOW()
+      AND c.DateReceived >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+      AND NOT EXISTS (
+            SELECT 1
+            FROM   appointment a
+            WHERE  a.PatNum      = c.PatNum
+              AND  a.AptStatus   IN (1, 3)
+              AND  a.AptDateTime > c.DateReceived
       )
-    ORDER BY c.DateSent DESC
+    ORDER BY c.DateReceived DESC
   `,
 
   format(rows) {
