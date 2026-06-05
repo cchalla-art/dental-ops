@@ -23,6 +23,11 @@ export default {
       c.DateReceived                            AS DateReceivedRaw,
       DATE_FORMAT(c.DateReceived, '%m/%d/%Y')   AS PreAuthReceived,
       DATEDIFF(CURDATE(), c.DateReceived)       AS DaysSinceReceived,
+      (SELECT DATE_FORMAT(MIN(a.AptDateTime), '%m/%d/%Y %h:%i %p')
+       FROM appointment a
+       WHERE a.PatNum = c.PatNum
+         AND a.AptStatus IN (1, 3)
+         AND a.AptDateTime > c.DateReceived)    AS AptDateTime,
       car.CarrierName
     FROM claim c
     JOIN patient  p   ON c.PatNum      = p.PatNum
@@ -51,7 +56,7 @@ export default {
 
     const entries = rows.slice(0, 10).map((r, i) => [
       `${i + 1}. #${r.PatNum} ${r.LName}, ${r.FName}`,
-      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | Sent ${r.PreAuthSent} (${r.DaysSinceSent}d ago)`,
+      `📞 ${r.Phone || 'No phone'} | ${r.CarrierName} | Received ${r.PreAuthReceived} (${r.DaysSinceReceived}d ago) | 📅 ${r.AptDateTime || 'No appt date'}`,
     ]);
 
     return {
